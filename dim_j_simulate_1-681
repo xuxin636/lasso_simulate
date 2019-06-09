@@ -1,5 +1,5 @@
 #!/bin/sh
-#dim_j_simulate_1201-1681.sh
+#dim_j_simulate_1-681.sh
 #Slurm script to run R program that generates graph of discrete Delta-hedging call
 
 #Slurm directives
@@ -9,9 +9,9 @@
 #SBATCH -c 1                     # The number of cpu cores to use.
 #SBATCH --time=6:00:00              # The time the job will take to run.
 #SBATCH --mem-per-cpu=6gb        # The memory the job will use per cpu core.
-#SBATCH --array=1201-1681
+#SBATCH --array=1-681
 module load R
 
 #Command to execute R code
-R CMD BATCH --no-save --vanilla dim_j_simulate.R dim_j_simulateout
+R CMD BATCH --no-save --vanilla 1dim_j_simulate.R 1dim_j_simulateout
 # End of script
