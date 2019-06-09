@@ -1,12 +1,12 @@
 library(mvtnorm)
 cond <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID"))
-E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/response1.csv"))
-ww <- 40
-w <- E[,2:(ww+1)]
-J = ncol(w)
-N = nrow(w)
-K = 3
-response <- w;
+N <- 1000;J <- 40;K <- 3
+theta_1 <- rnorm(N);theta_2 <- rnorm(N);theta_3 <- rnorm(N);theta_true <- cbind(rep(1,N),theta_1,theta_2,theta_3)
+D_true <- E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/d_true1.csv"))
+D_true <-D_true[,2:5]
+P_true <- 1/(1+exp(-theta_true%*%t(D_true)))
+response <- matrix(rbinom(N*J,1,P_true),nrow=N,ncol=J);#response
+colnames(response)<-1:J
 ###my code###
 Q <- matrix(1,J,K);Q[J,2:3] <- 0;Q[(J-1),3] <- 0;
 ##initial value###
@@ -20,7 +20,7 @@ THETA_tuta <- cbind(rep(1,nrow(THETA_tuta)),THETA_tuta)
 theta_square <- THETA_tuta[,2:4]*THETA_tuta[,2:4]
 theta_tmp <- rowSums(theta_square)/2
 xx <- seq(0.01,0.05,0.001);xx1 <- matrix(0,nrow = length(xx)*length(xx),ncol=2);xx1[,2] <- rep(xx,length(xx));xx1[,1] <- c(rep(1,length(xx))%*%t(xx))
-lammda <- c(rep(xx1[cond,1],J/2),rep(xx1[cond,2],J/2))*N;
+lammda <- c(rep(0,J/2),rep(0,J/2))*N;
 soft <- function(a,b){
   if(a>0&a>b){return(a-b)}
   else{return(0)}
@@ -445,4 +445,4 @@ tt <- timend-timstart
 tt
 bic <- -2*sum(log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp))))+log(N)*(J*K)
 RESULT <- rbind(c(bic,0,0,0),t(A_0))
-write.csv(RESULT, file =paste0('dim_j',cond,'.csv'))
+write.csv(RESULT, file =paste0('dim—_j_em',cond,'.csv'))
