@@ -1,6 +1,6 @@
 library(mvtnorm)
 cond <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID"))
-E <- as.matrix(read.csv("/rigel/home/jg4098/lasso_simulate/response1.csv"))
+E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/response1.csv"))
 ww <- 40
 w <- E[,2:(ww+1)]
 J = ncol(w)
@@ -15,7 +15,7 @@ A_initial <- A_initial*Q;
 d_initial <- rnorm(J,0,1);D_initial <- cbind(d_initial,A_initial);
 KK <- 20;theta_min <- -4;theta_max <- 4;mm1 <- seq(theta_min,theta_max,(theta_max-theta_min)/KK);mm <- mm1[-1]
 THETA_tuta <- matrix(0,nrow=KK*KK*KK,ncol=3);THETA_tuta[,3] <- rep(mm,KK*KK);
-THETA_tuta[,2] <-rep(c(rep(1,KK)%*%t(mm)),KK);THETA_tuta[,1] <-c(rep(1,KK*KK)%*%t(mm))#????????K <- 3¦Ì??theta¡¤????¨¦,????¨¨??theta¦Ì??¡¤????¨¦
+THETA_tuta[,2] <-rep(c(rep(1,KK)%*%t(mm)),KK);THETA_tuta[,1] <-c(rep(1,KK*KK)%*%t(mm))#????????K <- 3Â¦ÃŒ??thetaÂ¡Â¤????Â¨Â¦,????Â¨Â¨??thetaÂ¦ÃŒ??Â¡Â¤????Â¨Â¦
 THETA_tuta <- cbind(rep(1,nrow(THETA_tuta)),THETA_tuta)
 theta_square <- THETA_tuta[,2:4]*THETA_tuta[,2:4]
 theta_tmp <- rowSums(theta_square)/2
