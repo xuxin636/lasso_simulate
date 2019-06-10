@@ -1,6 +1,6 @@
 library(mvtnorm)
 cond <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID"))
-E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/response2.csv"))
+E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/response3.csv"))
 ww <- 40
 w <- E[,2:(ww+1)]
 J = ncol(w)
