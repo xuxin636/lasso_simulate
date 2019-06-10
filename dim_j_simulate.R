@@ -1,12 +1,12 @@
 library(mvtnorm)
 cond <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID"))
-N <- 1000;J <- 40;K <- 3
-theta_1 <- rnorm(N);theta_2 <- rnorm(N);theta_3 <- rnorm(N);theta_true <- cbind(rep(1,N),theta_1,theta_2,theta_3)
-D_true <- E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/d_true1.csv"))
-D_true <-D_true[,2:5]
-P_true <- 1/(1+exp(-theta_true%*%t(D_true)))
-response <- matrix(rbinom(N*J,1,P_true),nrow=N,ncol=J);#response
-colnames(response)<-1:J
+E <- as.matrix(read.csv("/rigel/home/xx2319/lasso_simulate/response1.csv"))
+ww <- 40
+w <- E[,2:(ww+1)]
+J = ncol(w)
+N = nrow(w)
+K = 3
+response <- w;
 ###my code###
 Q <- matrix(1,J,K);Q[J,2:3] <- 0;Q[(J-1),3] <- 0;
 ##initial value###
@@ -19,8 +19,8 @@ THETA_tuta[,2] <-rep(c(rep(1,KK)%*%t(mm)),KK);THETA_tuta[,1] <-c(rep(1,KK*KK)%*%
 THETA_tuta <- cbind(rep(1,nrow(THETA_tuta)),THETA_tuta)
 theta_square <- THETA_tuta[,2:4]*THETA_tuta[,2:4]
 theta_tmp <- rowSums(theta_square)/2
-xx <- seq(0.01,0.05,0.001);xx1 <- matrix(0,nrow = length(xx)*length(xx),ncol=2);xx1[,2] <- rep(xx,length(xx));xx1[,1] <- c(rep(1,length(xx))%*%t(xx))
-lammda <- c(rep(0,J/2),rep(0,J/2))*N;
+xx <- seq(0.001,0.03,0.001);xx1 <- matrix(0,nrow = length(xx)*length(xx),ncol=2);xx1[,2] <- rep(xx,length(xx));xx1[,1] <- c(rep(1,length(xx))%*%t(xx))
+lammda <- c(rep(xx1[cond,1],J/2),rep(xx1[cond,2],J/2))*N;
 soft <- function(a,b){
   if(a>0&a>b){return(a-b)}
   else{return(0)}
@@ -35,6 +35,8 @@ th0 <- rowSums(theta_post);
 th1 <- THETA_tuta[,2]*th0;th2 <- THETA_tuta[,3]*th0;th3 <- THETA_tuta[,4]*th0;
 uu <- theta_post%*%t(response);uu0 <-colSums(uu);uu1 <-colSums(THETA_tuta[,2]*uu);uu2 <-colSums(THETA_tuta[,3]*uu);uu3 <-colSums(THETA_tuta[,4]*uu);
 frac_00 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)))
+tol <- 1e-8
+fan_0 <- sqrt(sum(A_0*A_0))
 timstart <- Sys.time()
 for(j in 1:(J-2)){
   xx <- c(1/(1+exp(-temp_0[,j])))
@@ -42,31 +44,26 @@ for(j in 1:(J-2)){
   A_grad_2 <- -sum(th0*xx*(1-xx))
   d_tuta <- A_0[1,j]-A_grad/A_grad_2
   temp_1 <- temp_0;temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-  frac_0 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)));
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0)
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
+
+  while(eps>tol){
     temp_0 <- temp_1;
     A_0[1,j] <- d_tuta
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_grad <- uu0[j]-sum(th0* xx)
     A_grad_2 <- -sum(th0*xx*(1-xx))
-    d_tuta <- d_tuta-A_grad/A_grad_2
+    d_tuta <- A_0[1,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <-  sum(frac_1-frac_0)
+    eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
   }
   
-  frac_0 <-frac_1
   A_grad <- uu1[j]-sum(th1* xx)  
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
   A1_tuta <-A_0[2,j]-A_grad/A_grad_2
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
   temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
+  while(eps>tol){
     temp_0 <- temp_1;
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_0[2,j] <- A1_tuta
@@ -74,21 +71,17 @@ for(j in 1:(J-2)){
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
     A1_tuta <-A_0[2,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
+    eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
   }
   A_0[2,j]<-soft(A_0[2,j],-lammda[j]/A_grad_2)
   
-  
-  frac_0 <-frac_1
   A_grad <- uu2[j]-sum(th2* xx)  
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
   A2_tuta <-A_0[3,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j])
+  colSums(theta_post)
+  while(eps>tol){
     temp_0 <- temp_1;
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_0[3,j] <- A2_tuta
@@ -96,21 +89,17 @@ for(j in 1:(J-2)){
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
     A2_tuta <-A_0[3,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
+    eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j]) 
   }
   A_0[3,j] <- soft(A_0[3,j],-lammda[j]/A_grad_2)
   
-  frac_0 <-frac_1
   A_grad <- uu3[j]-sum(th3* xx)
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,3])
   A3_tuta <-A_0[4,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(A_0[1:3,j],A3_tuta)
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0)  
+  eps <- abs((A3_tuta-A_0[4,j])/A_0[4,j]) 
   
-  while(eps>5){
-    frac_0 <-frac_1
+  while(eps>tol){
     temp_0 <- temp_1;
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_0[4,j] <- A3_tuta
@@ -118,8 +107,7 @@ for(j in 1:(J-2)){
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,3])
     A3_tuta <-A3_tuta-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1:3,j],A3_tuta)
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
+    eps <- abs((A3_tuta-A_0[4,j])/A_0[4,j]) 
   }
   A_0[4,j] <- soft(A_0[4,j],-lammda[j]/A_grad_2)
 }
@@ -130,31 +118,27 @@ A_grad <- uu0[j]-sum(th0* xx)
 A_grad_2 <- -sum(th0*xx*(1-xx))
 d_tuta <- A_0[1,j]-A_grad/A_grad_2
 temp_1 <- temp_0;temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-frac_0 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)));
-frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-eps <- sum(frac_1-frac_0)
-while(eps>5){
-  frac_0 <-frac_1
+eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
+
+while(eps>tol){
+  
   temp_0 <- temp_1;
   A_0[1,j] <- d_tuta
   xx <- c(1/(1+exp(-temp_0[,j])))
   A_grad <- uu0[j]-sum(th0* xx)
   A_grad_2 <- -sum(th0*xx*(1-xx))
-  d_tuta <- d_tuta-A_grad/A_grad_2
+  d_tuta <- A_0[1,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <-  sum(frac_1-frac_0)
+  eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
 }
 
-frac_0 <-frac_1
 A_grad <- uu1[j]-sum(th1* xx)  
 A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
 A1_tuta <-A_0[2,j]-A_grad/A_grad_2
+eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
 temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-eps <- sum(frac_1-frac_0) 
-while(eps>5){
-  frac_0 <-frac_1
+eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
+while(eps>tol){
   temp_0 <- temp_1;
   xx <- c(1/(1+exp(-temp_0[,j])))
   A_0[2,j] <- A1_tuta
@@ -162,21 +146,16 @@ while(eps>5){
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
   A1_tuta <-A_0[2,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
 }
 A_0[2,j]<-soft(A_0[2,j],-lammda[j]/A_grad_2)
 
-
-frac_0 <-frac_1
 A_grad <- uu2[j]-sum(th2* xx)  
 A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
 A2_tuta <-A_0[3,j]-A_grad/A_grad_2
 temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-eps <- sum(frac_1-frac_0) 
-while(eps>5){
-  frac_0 <-frac_1
+eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j])
+while(eps>tol){
   temp_0 <- temp_1;
   xx <- c(1/(1+exp(-temp_0[,j])))
   A_0[3,j] <- A2_tuta
@@ -184,43 +163,37 @@ while(eps>5){
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
   A2_tuta <-A_0[3,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
+  eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j]) 
 }
 A_0[3,j] <- soft(A_0[3,j],-lammda[j]/A_grad_2)
-
-j <- 40;
 ####item 40####
+j <- 40
 xx <- c(1/(1+exp(-temp_0[,j])))
 A_grad <- uu0[j]-sum(th0* xx)
 A_grad_2 <- -sum(th0*xx*(1-xx))
 d_tuta <- A_0[1,j]-A_grad/A_grad_2
 temp_1 <- temp_0;temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-frac_0 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)));
-frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-eps <- sum(frac_1-frac_0)
-while(eps>5){
-  frac_0 <-frac_1
+eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
+
+while(eps>tol){
+  
   temp_0 <- temp_1;
   A_0[1,j] <- d_tuta
   xx <- c(1/(1+exp(-temp_0[,j])))
   A_grad <- uu0[j]-sum(th0* xx)
   A_grad_2 <- -sum(th0*xx*(1-xx))
-  d_tuta <- d_tuta-A_grad/A_grad_2
+  d_tuta <- A_0[1,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <-  sum(frac_1-frac_0)
+  eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
 }
 
-frac_0 <-frac_1
 A_grad <- uu1[j]-sum(th1* xx)  
 A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
 A1_tuta <-A_0[2,j]-A_grad/A_grad_2
+eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
 temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-eps <- sum(frac_1-frac_0) 
-while(eps>5){
-  frac_0 <-frac_1
+eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
+while(eps>tol){
   temp_0 <- temp_1;
   xx <- c(1/(1+exp(-temp_0[,j])))
   A_0[2,j] <- A1_tuta
@@ -228,50 +201,45 @@ while(eps>5){
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
   A1_tuta <-A_0[2,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
 }
 A_0[2,j]<-soft(A_0[2,j],-lammda[j]/A_grad_2)
 
 ####while####
-
-eps <-sum(frac_0-frac_00) -sum(lammda*A_0[3:4,])-penalty
-while(eps>5){
+for(m in 1:500){
   cc1 <- exp(temp_0%*%response-theta_tmp-rowSums(log(1+exp(temp_0))))
   theta_post <- sweep(cc1, 2, colSums(cc1), "/") 
-  penalty<- -sum(sweep(A_0,2,lammda,"*"))
-  frac_00 <- frac_0
+  th0 <- rowSums(theta_post);
+  th1 <- THETA_tuta[,2]*th0;th2 <- THETA_tuta[,3]*th0;th3 <- THETA_tuta[,4]*th0;
+  uu <- theta_post%*%t(response);uu0 <-colSums(uu);uu1 <-colSums(THETA_tuta[,2]*uu);uu2 <-colSums(THETA_tuta[,3]*uu);uu3 <-colSums(THETA_tuta[,4]*uu);
+  
   for(j in 1:(J-2)){
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_grad <- uu0[j]-sum(th0* xx)
     A_grad_2 <- -sum(th0*xx*(1-xx))
     d_tuta <- A_0[1,j]-A_grad/A_grad_2
     temp_1 <- temp_0;temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-    frac_0 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)));
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0)
-    while(eps>5){
-      frac_0 <-frac_1
+    eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
+    
+    while(eps>tol){
+      
       temp_0 <- temp_1;
       A_0[1,j] <- d_tuta
       xx <- c(1/(1+exp(-temp_0[,j])))
       A_grad <- uu0[j]-sum(th0* xx)
       A_grad_2 <- -sum(th0*xx*(1-xx))
-      d_tuta <- d_tuta-A_grad/A_grad_2
+      d_tuta <- A_0[1,j]-A_grad/A_grad_2
       temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-      frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-      eps <-  sum(frac_1-frac_0)
+      eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
     }
     
-    frac_0 <-frac_1
     A_grad <- uu1[j]-sum(th1* xx)  
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
     A1_tuta <-A_0[2,j]-A_grad/A_grad_2
+    eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
     temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
-    while(eps>5){
-      frac_0 <-frac_1
+    eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
+    while(eps>tol){
       temp_0 <- temp_1;
       xx <- c(1/(1+exp(-temp_0[,j])))
       A_0[2,j] <- A1_tuta
@@ -279,21 +247,16 @@ while(eps>5){
       A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
       A1_tuta <-A_0[2,j]-A_grad/A_grad_2
       temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-      frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-      eps <- sum(frac_1-frac_0) 
+      eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
     }
     A_0[2,j]<-soft(A_0[2,j],-lammda[j]/A_grad_2)
     
-    
-    frac_0 <-frac_1
     A_grad <- uu2[j]-sum(th2* xx)  
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
     A2_tuta <-A_0[3,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
-    while(eps>5){
-      frac_0 <-frac_1
+    eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j])
+    while(eps>tol){
       temp_0 <- temp_1;
       xx <- c(1/(1+exp(-temp_0[,j])))
       A_0[3,j] <- A2_tuta
@@ -301,21 +264,17 @@ while(eps>5){
       A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
       A2_tuta <-A_0[3,j]-A_grad/A_grad_2
       temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-      frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-      eps <- sum(frac_1-frac_0) 
+      eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j]) 
     }
     A_0[3,j] <- soft(A_0[3,j],-lammda[j]/A_grad_2)
     
-    frac_0 <-frac_1
     A_grad <- uu3[j]-sum(th3* xx)
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,3])
     A3_tuta <-A_0[4,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1:3,j],A3_tuta)
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0)  
+    eps <- abs((A3_tuta-A_0[4,j])/A_0[4,j]) 
     
-    while(eps>5){
-      frac_0 <-frac_1
+    while(eps>tol){
       temp_0 <- temp_1;
       xx <- c(1/(1+exp(-temp_0[,j])))
       A_0[4,j] <- A3_tuta
@@ -323,8 +282,7 @@ while(eps>5){
       A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,3])
       A3_tuta <-A3_tuta-A_grad/A_grad_2
       temp_1[,j] <- THETA_tuta%*%c(A_0[1:3,j],A3_tuta)
-      frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-      eps <- sum(frac_1-frac_0) 
+      eps <- abs((A3_tuta-A_0[4,j])/A_0[4,j]) 
     }
     A_0[4,j] <- soft(A_0[4,j],-lammda[j]/A_grad_2)
   }
@@ -335,31 +293,27 @@ while(eps>5){
   A_grad_2 <- -sum(th0*xx*(1-xx))
   d_tuta <- A_0[1,j]-A_grad/A_grad_2
   temp_1 <- temp_0;temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-  frac_0 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)));
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0)
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
+  
+  while(eps>tol){
+    
     temp_0 <- temp_1;
     A_0[1,j] <- d_tuta
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_grad <- uu0[j]-sum(th0* xx)
     A_grad_2 <- -sum(th0*xx*(1-xx))
-    d_tuta <- d_tuta-A_grad/A_grad_2
+    d_tuta <- A_0[1,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <-  sum(frac_1-frac_0)
+    eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
   }
   
-  frac_0 <-frac_1
   A_grad <- uu1[j]-sum(th1* xx)  
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
   A1_tuta <-A_0[2,j]-A_grad/A_grad_2
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
   temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
+  while(eps>tol){
     temp_0 <- temp_1;
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_0[2,j] <- A1_tuta
@@ -367,21 +321,16 @@ while(eps>5){
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
     A1_tuta <-A_0[2,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
+    eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
   }
   A_0[2,j]<-soft(A_0[2,j],-lammda[j]/A_grad_2)
   
-  
-  frac_0 <-frac_1
   A_grad <- uu2[j]-sum(th2* xx)  
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
   A2_tuta <-A_0[3,j]-A_grad/A_grad_2
   temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j])
+  while(eps>tol){
     temp_0 <- temp_1;
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_0[3,j] <- A2_tuta
@@ -389,43 +338,37 @@ while(eps>5){
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,2])
     A2_tuta <-A_0[3,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1:2,j],A2_tuta,A_0[4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
+    eps <- abs((A2_tuta-A_0[3,j])/A_0[3,j]) 
   }
   A_0[3,j] <- soft(A_0[3,j],-lammda[j]/A_grad_2)
-  
-  j <- 40;
   ####item 40####
+  j <- 40
   xx <- c(1/(1+exp(-temp_0[,j])))
   A_grad <- uu0[j]-sum(th0* xx)
   A_grad_2 <- -sum(th0*xx*(1-xx))
   d_tuta <- A_0[1,j]-A_grad/A_grad_2
   temp_1 <- temp_0;temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-  frac_0 <- log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp)));
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0)
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
+  
+  while(eps>tol){
+    
     temp_0 <- temp_1;
     A_0[1,j] <- d_tuta
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_grad <- uu0[j]-sum(th0* xx)
     A_grad_2 <- -sum(th0*xx*(1-xx))
-    d_tuta <- d_tuta-A_grad/A_grad_2
+    d_tuta <- A_0[1,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(d_tuta,A_0[-1,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <-  sum(frac_1-frac_0)
+    eps <- abs((d_tuta-A_0[1,j])/A_0[1,j])
   }
   
-  frac_0 <-frac_1
   A_grad <- uu1[j]-sum(th1* xx)  
   A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
   A1_tuta <-A_0[2,j]-A_grad/A_grad_2
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
   temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-  frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-  eps <- sum(frac_1-frac_0) 
-  while(eps>5){
-    frac_0 <-frac_1
+  eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
+  while(eps>tol){
     temp_0 <- temp_1;
     xx <- c(1/(1+exp(-temp_0[,j])))
     A_0[2,j] <- A1_tuta
@@ -433,16 +376,15 @@ while(eps>5){
     A_grad_2 <- -sum(th0*xx*(1-xx)*theta_square[,1])
     A1_tuta <-A_0[2,j]-A_grad/A_grad_2
     temp_1[,j] <- THETA_tuta%*%c(A_0[1,j],A1_tuta,A_0[3:4,j])
-    frac_1 <- log(colSums(exp(temp_1%*%response-rowSums(log(1+exp(temp_1)))-theta_tmp)))
-    eps <- sum(frac_1-frac_0) 
+    eps <- abs((A1_tuta-A_0[2,j])/A_0[2,j])
   }
   A_0[2,j]<-soft(A_0[2,j],-lammda[j]/A_grad_2)
-  eps <-sum(frac_0-frac_00) -sum(sweep(A_0,2,lammda,"*"))-penalty
 }
+  
 
 timend <- Sys.time()
 tt <- timend-timstart
 tt
 bic <- -2*sum(log(colSums(exp(temp_0%*%response-rowSums(log(1+exp(temp_0)))-theta_tmp))))+log(N)*(J*K)
 RESULT <- rbind(c(bic,0,0,0),t(A_0))
-write.csv(RESULT, file =paste0('dim—_j_em',cond,'.csv'))
+write.csv(RESULT, file =paste0('dim_j',cond,'.csv'))
