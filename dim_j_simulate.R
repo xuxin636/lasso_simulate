@@ -95,22 +95,6 @@ timstart <- Sys.time()
   A_grad_2 <- -colSums(th0*xx*(1-xx)*theta_square[,3])
   A_0[4,] <- c(soft(A3_tuta[-((J-1):J)],(-lammda/A_grad_2)[-((J-1):J)],J-2),0,0)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-cbind(D_true[,2:5],rep(0,J),t(A_0))
-mean(abs(D_true[,2:5]-t(A_0)))
-
 ####while####
 for(m in 1:500){
   temp_0 <- THETA_tuta%*%A_0
