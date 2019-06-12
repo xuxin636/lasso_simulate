@@ -112,7 +112,7 @@ cbind(D_true[,2:5],rep(0,J),t(A_0))
 mean(abs(D_true[,2:5]-t(A_0)))
 
 ####while####
-for(m in 1:100){
+for(m in 1:500){
   temp_0 <- THETA_tuta%*%A_0
   cc1 <- exp(temp_0%*%response-theta_tmp-rowSums(log(1+exp(temp_0))))
   theta_post <- sweep(cc1, 2, colSums(cc1), "/") 
